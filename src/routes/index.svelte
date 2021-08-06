@@ -22,6 +22,7 @@
 
 <svelte:head>
   <title>Aether Unmanned Aerial Operations</title>
+  <meta name="description" content="Aether Operations provides aerial photography and videography using state-of-the-art drone technology. Servicing the needs of any industry including real estate, geospatial, entertainment, and live events.">
   <meta property="og:image" content="aether-logo.png">
   <meta property="og:title" content="Aether Unmanned Aerial Operations">
   <meta property="og:description" content="Providing unmanned aerial photography and videography.">
@@ -40,7 +41,7 @@
         <h1 class:show-text={hovering}>Aether Unmanned Aerial Operations</h1>
         <p class:show-text={hovering}>Website coming soon.</p>
         <p class:show-text={hovering}>
-          Contact us at <a href="mailto:info@aether.com">info@aether.com</a>.
+          Contact us at <a href="mailto:info@aetheroperations.com">info@aetheroperations.com</a>.
         </p>
       </div>
   </div>
