@@ -72,6 +72,7 @@ function dataUriToBuffer(uri) {
   return buffer;
 }
 var src = dataUriToBuffer;
+var dataUriToBuffer$1 = src;
 var { Readable } = import_stream.default;
 var wm = new WeakMap();
 async function* read(parts) {
@@ -170,6 +171,7 @@ Object.defineProperties(Blob.prototype, {
   slice: { enumerable: true }
 });
 var fetchBlob = Blob;
+var Blob$1 = fetchBlob;
 var FetchBaseError = class extends Error {
   constructor(message, type) {
     super(message);
@@ -299,7 +301,7 @@ var Body = class {
   async blob() {
     const ct = this.headers && this.headers.get("content-type") || this[INTERNALS$2].body && this[INTERNALS$2].body.type || "";
     const buf = await this.buffer();
-    return new fetchBlob([buf], {
+    return new Blob$1([buf], {
       type: ct
     });
   }
@@ -610,7 +612,7 @@ var isRedirect = (code) => {
   return redirectStatus.has(code);
 };
 var INTERNALS$1 = Symbol("Response internals");
-var Response2 = class extends Body {
+var Response = class extends Body {
   constructor(body = null, options2 = {}) {
     super(body, options2);
     const status = options2.status || 200;
@@ -652,7 +654,7 @@ var Response2 = class extends Body {
     return this[INTERNALS$1].highWaterMark;
   }
   clone() {
-    return new Response2(clone(this, this.highWaterMark), {
+    return new Response(clone(this, this.highWaterMark), {
       url: this.url,
       status: this.status,
       statusText: this.statusText,
@@ -666,7 +668,7 @@ var Response2 = class extends Body {
     if (!isRedirect(status)) {
       throw new RangeError('Failed to execute "redirect" on "response": Invalid status code');
     }
-    return new Response2(null, {
+    return new Response(null, {
       headers: {
         location: new URL(url).toString()
       },
@@ -677,7 +679,7 @@ var Response2 = class extends Body {
     return "Response";
   }
 };
-Object.defineProperties(Response2.prototype, {
+Object.defineProperties(Response.prototype, {
   url: { enumerable: true },
   status: { enumerable: true },
   ok: { enumerable: true },
@@ -830,7 +832,7 @@ var AbortError = class extends FetchBaseError {
   }
 };
 var supportedSchemas = new Set(["data:", "http:", "https:"]);
-async function fetch2(url, options_) {
+async function fetch(url, options_) {
   return new Promise((resolve2, reject) => {
     const request = new Request(url, options_);
     const options2 = getNodeRequestOptions(request);
@@ -838,8 +840,8 @@ async function fetch2(url, options_) {
       throw new TypeError(`node-fetch cannot load ${url}. URL scheme "${options2.protocol.replace(/:$/, "")}" is not supported.`);
     }
     if (options2.protocol === "data:") {
-      const data = src(request.url);
-      const response2 = new Response2(data, { headers: { "Content-Type": data.typeFull } });
+      const data = dataUriToBuffer$1(request.url);
+      const response2 = new Response(data, { headers: { "Content-Type": data.typeFull } });
       resolve2(response2);
       return;
     }
@@ -929,7 +931,7 @@ async function fetch2(url, options_) {
               requestOptions.body = void 0;
               requestOptions.headers.delete("content-length");
             }
-            resolve2(fetch2(new Request(locationURL, requestOptions)));
+            resolve2(fetch(new Request(locationURL, requestOptions)));
             finalize();
             return;
           }
@@ -957,7 +959,7 @@ async function fetch2(url, options_) {
       };
       const codings = headers.get("Content-Encoding");
       if (!request.compress || request.method === "HEAD" || codings === null || response_.statusCode === 204 || response_.statusCode === 304) {
-        response = new Response2(body, responseOptions);
+        response = new Response(body, responseOptions);
         resolve2(response);
         return;
       }
@@ -969,7 +971,7 @@ async function fetch2(url, options_) {
         body = (0, import_stream.pipeline)(body, import_zlib.default.createGunzip(zlibOptions), (error3) => {
           reject(error3);
         });
-        response = new Response2(body, responseOptions);
+        response = new Response(body, responseOptions);
         resolve2(response);
         return;
       }
@@ -987,7 +989,7 @@ async function fetch2(url, options_) {
               reject(error3);
             });
           }
-          response = new Response2(body, responseOptions);
+          response = new Response(body, responseOptions);
           resolve2(response);
         });
         return;
@@ -996,22 +998,78 @@ async function fetch2(url, options_) {
         body = (0, import_stream.pipeline)(body, import_zlib.default.createBrotliDecompress(), (error3) => {
           reject(error3);
         });
-        response = new Response2(body, responseOptions);
+        response = new Response(body, responseOptions);
         resolve2(response);
         return;
       }
-      response = new Response2(body, responseOptions);
+      response = new Response(body, responseOptions);
       resolve2(response);
     });
     writeToStream(request_, request);
   });
 }
-globalThis.fetch = fetch2;
-globalThis.Response = Response2;
-globalThis.Request = Request;
-globalThis.Headers = Headers;
+
+// node_modules/@sveltejs/kit/dist/adapter-utils.js
+function isContentTypeTextual(content_type) {
+  if (!content_type)
+    return true;
+  const [type] = content_type.split(";");
+  return type === "text/plain" || type === "application/json" || type === "application/x-www-form-urlencoded" || type === "multipart/form-data";
+}
 
 // node_modules/@sveltejs/kit/dist/ssr.js
+function lowercase_keys(obj) {
+  const clone2 = {};
+  for (const key in obj) {
+    clone2[key.toLowerCase()] = obj[key];
+  }
+  return clone2;
+}
+function error(body) {
+  return {
+    status: 500,
+    body,
+    headers: {}
+  };
+}
+function is_string(s2) {
+  return typeof s2 === "string" || s2 instanceof String;
+}
+async function render_endpoint(request, route) {
+  const mod = await route.load();
+  const handler2 = mod[request.method.toLowerCase().replace("delete", "del")];
+  if (!handler2) {
+    return;
+  }
+  const match = route.pattern.exec(request.path);
+  if (!match) {
+    return error("could not parse parameters from request path");
+  }
+  const params = route.params(match);
+  const response = await handler2({ ...request, params });
+  const preface = `Invalid response from route ${request.path}`;
+  if (!response) {
+    return;
+  }
+  if (typeof response !== "object") {
+    return error(`${preface}: expected an object, got ${typeof response}`);
+  }
+  let { status = 200, body, headers = {} } = response;
+  headers = lowercase_keys(headers);
+  const type = headers["content-type"];
+  const is_type_textual = isContentTypeTextual(type);
+  if (!is_type_textual && !(body instanceof Uint8Array || is_string(body))) {
+    return error(`${preface}: body must be an instance of string or Uint8Array if content-type is not a supported textual content-type`);
+  }
+  let normalized_body;
+  if ((typeof body === "object" || typeof body === "undefined") && !(body instanceof Uint8Array) && (!type || type.startsWith("application/json"))) {
+    headers = { ...headers, "content-type": "application/json; charset=utf-8" };
+    normalized_body = JSON.stringify(typeof body === "undefined" ? {} : body);
+  } else {
+    normalized_body = body;
+  }
+  return { status, body: normalized_body, headers };
+}
 var chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$";
 var unsafeChars = /[<>\b\f\n\r\t\0\u2028\u2029]/g;
 var reserved = /^(?:do|if|in|for|int|let|new|try|var|byte|case|char|else|enum|goto|long|this|void|with|await|break|catch|class|const|final|float|short|super|throw|while|yield|delete|double|export|import|native|return|switch|throws|typeof|boolean|default|extends|finally|package|private|abstract|continue|debugger|function|volatile|interface|protected|transient|implements|instanceof|synchronized)$/;
@@ -1239,6 +1297,7 @@ function noop() {
 function safe_not_equal(a, b) {
   return a != a ? b == b : a !== b || (a && typeof a === "object" || typeof a === "function");
 }
+Promise.resolve();
 var subscriber_queue = [];
 function writable(value, start = noop) {
   let stop;
@@ -1388,16 +1447,23 @@ async function render_response({
 					status: ${status},
 					error: ${serialize_error(error3)},
 					nodes: [
-						${branch.map(({ node }) => `import(${s$1(node.entry)})`).join(",\n						")}
+						${(branch || []).map(({ node }) => `import(${s$1(node.entry)})`).join(",\n						")}
 					],
 					page: {
-						host: ${page.host ? s$1(page.host) : "location.host"}, // TODO this is redundant
-						path: ${s$1(page.path)},
-						query: new URLSearchParams(${s$1(page.query.toString())}),
-						params: ${s$1(page.params)}
+						host: ${page && page.host ? s$1(page.host) : "location.host"}, // TODO this is redundant
+						path: ${s$1(page && page.path)},
+						query: new URLSearchParams(${page ? s$1(page.query.toString()) : ""}),
+						params: ${page && s$1(page.params)}
 					}
 				}` : "null"}
 			});
+		<\/script>`;
+  }
+  if (options2.service_worker) {
+    init2 += `<script>
+			if ('serviceWorker' in navigator) {
+				navigator.serviceWorker.register('${options2.service_worker}');
+			}
 		<\/script>`;
   }
   const head = [
@@ -1409,7 +1475,10 @@ async function render_response({
   const body = options2.amp ? rendered.html : `${rendered.html}
 
 			${serialized_data.map(({ url, body: body2, json }) => {
-    return body2 ? `<script type="svelte-data" url="${url}" body="${hash(body2)}">${json}<\/script>` : `<script type="svelte-data" url="${url}">${json}<\/script>`;
+    let attributes = `type="application/json" data-type="svelte-data" data-url="${url}"`;
+    if (body2)
+      attributes += ` data-body="${hash(body2)}"`;
+    return `<script ${attributes}>${json}<\/script>`;
   }).join("\n\n			")}
 		`.replace(/^\t{2}/gm, "");
   const headers = {
@@ -1442,7 +1511,7 @@ function serialize_error(error3) {
   let serialized = try_serialize(error3);
   if (!serialized) {
     const { name, message, stack } = error3;
-    serialized = try_serialize({ name, message, stack });
+    serialized = try_serialize({ ...error3, name, message, stack });
   }
   if (!serialized) {
     serialized = "{}";
@@ -1450,9 +1519,16 @@ function serialize_error(error3) {
   return serialized;
 }
 function normalize(loaded) {
-  if (loaded.error) {
-    const error3 = typeof loaded.error === "string" ? new Error(loaded.error) : loaded.error;
+  const has_error_status = loaded.status && loaded.status >= 400 && loaded.status <= 599 && !loaded.redirect;
+  if (loaded.error || has_error_status) {
     const status = loaded.status;
+    if (!loaded.error && has_error_status) {
+      return {
+        status: status || 500,
+        error: new Error()
+      };
+    }
+    const error3 = typeof loaded.error === "string" ? new Error(loaded.error) : loaded.error;
     if (!(error3 instanceof Error)) {
       return {
         status: 500,
@@ -1481,9 +1557,15 @@ function normalize(loaded) {
   }
   return loaded;
 }
+var absolute = /^([a-z]+:)?\/?\//;
 function resolve(base, path) {
-  const baseparts = path[0] === "/" ? [] : base.slice(1).split("/");
-  const pathparts = path[0] === "/" ? path.slice(1).split("/") : path.split("/");
+  const base_match = absolute.exec(base);
+  const path_match = absolute.exec(path);
+  if (!base_match) {
+    throw new Error(`bad base path: "${base}"`);
+  }
+  const baseparts = path_match ? [] : base.slice(base_match[0].length).split("/");
+  const pathparts = path_match ? path.slice(path_match[0].length).split("/") : path.split("/");
   baseparts.pop();
   for (let i = 0; i < pathparts.length; i += 1) {
     const part = pathparts[i];
@@ -1494,7 +1576,8 @@ function resolve(base, path) {
     else
       baseparts.push(part);
   }
-  return `/${baseparts.join("/")}`;
+  const prefix = path_match && path_match[0] || base_match && base_match[0] || "";
+  return `${prefix}${baseparts.join("/")}`;
 }
 var s = JSON.stringify;
 async function load_node({
@@ -1541,65 +1624,68 @@ async function load_node({
             ...opts
           };
         }
-        if (options2.read && url.startsWith(options2.paths.assets)) {
-          url = url.replace(options2.paths.assets, "");
-        }
-        if (url.startsWith("//")) {
-          throw new Error(`Cannot request protocol-relative URL (${url}) in server-side fetch`);
-        }
+        const resolved = resolve(request.path, url.split("?")[0]);
         let response;
-        if (/^[a-zA-Z]+:/.test(url)) {
-          response = await fetch(url, opts);
-        } else {
-          const [path, search] = url.split("?");
-          const resolved = resolve(request.path, path);
-          const filename = resolved.slice(1);
-          const filename_html = `${filename}/index.html`;
-          const asset = options2.manifest.assets.find((d) => d.file === filename || d.file === filename_html);
-          if (asset) {
-            if (options2.read) {
-              response = new Response(options2.read(asset.file), {
-                headers: {
-                  "content-type": asset.type
-                }
-              });
-            } else {
-              response = await fetch(`http://${page.host}/${asset.file}`, opts);
+        const filename = resolved.replace(options2.paths.assets, "").slice(1);
+        const filename_html = `${filename}/index.html`;
+        const asset = options2.manifest.assets.find((d) => d.file === filename || d.file === filename_html);
+        if (asset) {
+          response = options2.read ? new Response(options2.read(asset.file), {
+            headers: asset.type ? {
+              "content-type": asset.type
+            } : {}
+          }) : await fetch(`http://${page.host}/${asset.file}`, opts);
+        } else if (resolved.startsWith(options2.paths.base || "/") && !resolved.startsWith("//")) {
+          const relative = resolved.replace(options2.paths.base, "");
+          const headers = { ...opts.headers };
+          if (opts.credentials !== "omit") {
+            uses_credentials = true;
+            headers.cookie = request.headers.cookie;
+            if (!headers.authorization) {
+              headers.authorization = request.headers.authorization;
             }
           }
-          if (!response) {
-            const headers = { ...opts.headers };
-            if (opts.credentials !== "omit") {
-              uses_credentials = true;
-              headers.cookie = request.headers.cookie;
-              if (!headers.authorization) {
-                headers.authorization = request.headers.authorization;
-              }
+          if (opts.body && typeof opts.body !== "string") {
+            throw new Error("Request body must be a string");
+          }
+          const search = url.includes("?") ? url.slice(url.indexOf("?") + 1) : "";
+          const rendered = await respond({
+            host: request.host,
+            method: opts.method || "GET",
+            headers,
+            path: relative,
+            rawBody: opts.body,
+            query: new URLSearchParams(search)
+          }, options2, {
+            fetched: url,
+            initiator: route
+          });
+          if (rendered) {
+            if (state.prerender) {
+              state.prerender.dependencies.set(relative, rendered);
             }
-            if (opts.body && typeof opts.body !== "string") {
-              throw new Error("Request body must be a string");
-            }
-            const rendered = await respond({
-              host: request.host,
-              method: opts.method || "GET",
-              headers,
-              path: resolved,
-              rawBody: opts.body,
-              query: new URLSearchParams(search)
-            }, options2, {
-              fetched: url,
-              initiator: route
+            response = new Response(rendered.body, {
+              status: rendered.status,
+              headers: rendered.headers
             });
-            if (rendered) {
-              if (state.prerender) {
-                state.prerender.dependencies.set(resolved, rendered);
-              }
-              response = new Response(rendered.body, {
-                status: rendered.status,
-                headers: rendered.headers
-              });
+          }
+        } else {
+          if (resolved.startsWith("//")) {
+            throw new Error(`Cannot request protocol-relative URL (${url}) in server-side fetch`);
+          }
+          if (typeof request.host !== "undefined") {
+            const { hostname: fetch_hostname } = new URL(url);
+            const [server_hostname] = request.host.split(":");
+            if (`.${fetch_hostname}`.endsWith(`.${server_hostname}`) && opts.credentials !== "omit") {
+              uses_credentials = true;
+              opts.headers = {
+                ...opts.headers,
+                cookie: request.headers.cookie
+              };
             }
           }
+          const external_request = new Request(url, opts);
+          response = await options2.hooks.serverFetch.call(null, external_request);
         }
         if (response) {
           const proxy = new Proxy(response, {
@@ -1649,6 +1735,9 @@ async function load_node({
   }
   if (!loaded && is_leaf && !is_error)
     return;
+  if (!loaded) {
+    throw new Error(`${node.entry} - load must return a value except for page fall through`);
+  }
   return {
     node,
     loaded: normalize(loaded),
@@ -1694,6 +1783,9 @@ function escape(str) {
   result += '"';
   return result;
 }
+function coalesce_to_error(err) {
+  return err instanceof Error ? err : new Error(JSON.stringify(err));
+}
 async function respond_with_error({ request, options: options2, state, $session, status, error: error3 }) {
   const default_layout = await options2.load_component(options2.manifest.layout);
   const default_error = await options2.load_component(options2.manifest.error);
@@ -1725,7 +1817,7 @@ async function respond_with_error({ request, options: options2, state, $session,
       page,
       node: default_error,
       $session,
-      context: loaded.context,
+      context: loaded ? loaded.context : {},
       is_leaf: false,
       is_error: true,
       status,
@@ -1746,7 +1838,8 @@ async function respond_with_error({ request, options: options2, state, $session,
       branch,
       page
     });
-  } catch (error4) {
+  } catch (err) {
+    const error4 = coalesce_to_error(err);
     options2.handle_error(error4);
     return {
       status: 500,
@@ -1766,8 +1859,9 @@ async function respond$1({ request, options: options2, state, $session, route })
   };
   let nodes;
   try {
-    nodes = await Promise.all(route.a.map((id) => id && options2.load_component(id)));
-  } catch (error4) {
+    nodes = await Promise.all(route.a.map((id) => id ? options2.load_component(id) : void 0));
+  } catch (err) {
+    const error4 = coalesce_to_error(err);
     options2.handle_error(error4);
     return await respond_with_error({
       request,
@@ -1780,15 +1874,15 @@ async function respond$1({ request, options: options2, state, $session, route })
   }
   const leaf = nodes[nodes.length - 1].module;
   const page_config = {
-    ssr: "ssr" in leaf ? leaf.ssr : options2.ssr,
-    router: "router" in leaf ? leaf.router : options2.router,
-    hydrate: "hydrate" in leaf ? leaf.hydrate : options2.hydrate
+    ssr: "ssr" in leaf ? !!leaf.ssr : options2.ssr,
+    router: "router" in leaf ? !!leaf.router : options2.router,
+    hydrate: "hydrate" in leaf ? !!leaf.hydrate : options2.hydrate
   };
   if (!leaf.prerender && state.prerender && !state.prerender.all) {
     return {
       status: 204,
       headers: {},
-      body: null
+      body: ""
     };
   }
   let branch;
@@ -1827,8 +1921,11 @@ async function respond$1({ request, options: options2, state, $session, route })
             }
             if (loaded.loaded.error) {
               ({ status, error: error3 } = loaded.loaded);
+            } else {
+              branch.push(loaded);
             }
-          } catch (e) {
+          } catch (err) {
+            const e = coalesce_to_error(err);
             options2.handle_error(e);
             status = 500;
             error3 = e;
@@ -1837,12 +1934,12 @@ async function respond$1({ request, options: options2, state, $session, route })
             while (i--) {
               if (route.b[i]) {
                 const error_node = await options2.load_component(route.b[i]);
-                let error_loaded;
                 let node_loaded;
                 let j = i;
                 while (!(node_loaded = branch[j])) {
                   j -= 1;
                 }
+                let error_loaded;
                 try {
                   error_loaded = await load_node({
                     request,
@@ -1863,7 +1960,8 @@ async function respond$1({ request, options: options2, state, $session, route })
                   }
                   branch = branch.slice(0, j + 1).concat(error_loaded);
                   break ssr;
-                } catch (e) {
+                } catch (err) {
+                  const e = coalesce_to_error(err);
                   options2.handle_error(e);
                   continue;
                 }
@@ -1879,7 +1977,6 @@ async function respond$1({ request, options: options2, state, $session, route })
             });
           }
         }
-        branch.push(loaded);
         if (loaded && loaded.loaded.context) {
           context = {
             ...context,
@@ -1898,7 +1995,8 @@ async function respond$1({ request, options: options2, state, $session, route })
       branch: branch && branch.filter(Boolean),
       page
     });
-  } catch (error4) {
+  } catch (err) {
+    const error4 = coalesce_to_error(err);
     options2.handle_error(error4);
     return await respond_with_error({
       request,
@@ -1919,78 +2017,22 @@ async function render_page(request, route, options2, state) {
     };
   }
   const $session = await options2.hooks.getSession(request);
-  if (route) {
-    const response = await respond$1({
-      request,
-      options: options2,
-      state,
-      $session,
-      route
-    });
-    if (response) {
-      return response;
-    }
-    if (state.fetched) {
-      return {
-        status: 500,
-        headers: {},
-        body: `Bad request in load function: failed to fetch ${state.fetched}`
-      };
-    }
-  } else {
-    return await respond_with_error({
-      request,
-      options: options2,
-      state,
-      $session,
-      status: 404,
-      error: new Error(`Not found: ${request.path}`)
-    });
+  const response = await respond$1({
+    request,
+    options: options2,
+    state,
+    $session,
+    route
+  });
+  if (response) {
+    return response;
   }
-}
-function lowercase_keys(obj) {
-  const clone2 = {};
-  for (const key in obj) {
-    clone2[key.toLowerCase()] = obj[key];
-  }
-  return clone2;
-}
-function error(body) {
-  return {
-    status: 500,
-    body,
-    headers: {}
-  };
-}
-async function render_route(request, route) {
-  const mod = await route.load();
-  const handler2 = mod[request.method.toLowerCase().replace("delete", "del")];
-  if (handler2) {
-    const match = route.pattern.exec(request.path);
-    const params = route.params(match);
-    const response = await handler2({ ...request, params });
-    if (response) {
-      if (typeof response !== "object") {
-        return error(`Invalid response from route ${request.path}: expected an object, got ${typeof response}`);
-      }
-      let { status = 200, body, headers = {} } = response;
-      headers = lowercase_keys(headers);
-      const type = headers["content-type"];
-      if (type === "application/octet-stream" && !(body instanceof Uint8Array)) {
-        return error(`Invalid response from route ${request.path}: body must be an instance of Uint8Array if content type is application/octet-stream`);
-      }
-      if (body instanceof Uint8Array && type !== "application/octet-stream") {
-        return error(`Invalid response from route ${request.path}: Uint8Array body must be accompanied by content-type: application/octet-stream header`);
-      }
-      let normalized_body;
-      if (typeof body === "object" && (!type || type === "application/json")) {
-        headers = { ...headers, "content-type": "application/json" };
-        normalized_body = JSON.stringify(body);
-      } else {
-        normalized_body = body;
-      }
-      return { status, body: normalized_body, headers };
-    }
+  if (state.fetched) {
+    return {
+      status: 500,
+      headers: {},
+      body: `Bad request in load function: failed to fetch ${state.fetched}`
+    };
   }
 }
 function read_only_form_data() {
@@ -1998,7 +2040,7 @@ function read_only_form_data() {
   return {
     append(key, value) {
       if (map.has(key)) {
-        map.get(key).push(value);
+        (map.get(key) || []).push(value);
       } else {
         map.set(key, [value]);
       }
@@ -2036,43 +2078,37 @@ var ReadOnlyFormData = class {
     }
   }
   *keys() {
-    for (const [key, value] of this.#map) {
-      for (let i = 0; i < value.length; i += 1) {
-        yield key;
-      }
-    }
+    for (const [key] of this.#map)
+      yield key;
   }
   *values() {
     for (const [, value] of this.#map) {
       for (let i = 0; i < value.length; i += 1) {
-        yield value;
+        yield value[i];
       }
     }
   }
 };
 function parse_body(raw, headers) {
-  if (!raw)
+  if (!raw || typeof raw !== "string")
     return raw;
   const [type, ...directives] = headers["content-type"].split(/;\s*/);
-  if (typeof raw === "string") {
-    switch (type) {
-      case "text/plain":
-        return raw;
-      case "application/json":
-        return JSON.parse(raw);
-      case "application/x-www-form-urlencoded":
-        return get_urlencoded(raw);
-      case "multipart/form-data": {
-        const boundary = directives.find((directive) => directive.startsWith("boundary="));
-        if (!boundary)
-          throw new Error("Missing boundary");
-        return get_multipart(raw, boundary.slice("boundary=".length));
-      }
-      default:
-        throw new Error(`Invalid Content-Type ${type}`);
+  switch (type) {
+    case "text/plain":
+      return raw;
+    case "application/json":
+      return JSON.parse(raw);
+    case "application/x-www-form-urlencoded":
+      return get_urlencoded(raw);
+    case "multipart/form-data": {
+      const boundary = directives.find((directive) => directive.startsWith("boundary="));
+      if (!boundary)
+        throw new Error("Missing boundary");
+      return get_multipart(raw, boundary.slice("boundary=".length));
     }
+    default:
+      throw new Error(`Invalid Content-Type ${type}`);
   }
-  return raw;
 }
 function get_urlencoded(text) {
   const { data, append } = read_only_form_data();
@@ -2084,22 +2120,24 @@ function get_urlencoded(text) {
 }
 function get_multipart(text, boundary) {
   const parts = text.split(`--${boundary}`);
-  const nope = () => {
-    throw new Error("Malformed form data");
-  };
   if (parts[0] !== "" || parts[parts.length - 1].trim() !== "--") {
-    nope();
+    throw new Error("Malformed form data");
   }
   const { data, append } = read_only_form_data();
   parts.slice(1, -1).forEach((part) => {
     const match = /\s*([\s\S]+?)\r\n\r\n([\s\S]*)\s*/.exec(part);
+    if (!match) {
+      throw new Error("Malformed form data");
+    }
     const raw_headers = match[1];
     const body = match[2].trim();
     let key;
+    const headers = {};
     raw_headers.split("\r\n").forEach((str) => {
       const [raw_header, ...raw_directives] = str.split("; ");
       let [name, value] = raw_header.split(": ");
       name = name.toLowerCase();
+      headers[name] = value;
       const directives = {};
       raw_directives.forEach((raw_directive) => {
         const [name2, value2] = raw_directive.split("=");
@@ -2107,7 +2145,7 @@ function get_multipart(text, boundary) {
       });
       if (name === "content-disposition") {
         if (value !== "form-data")
-          nope();
+          throw new Error("Malformed form data");
         if (directives.filename) {
           throw new Error("File upload is not yet implemented");
         }
@@ -2117,7 +2155,7 @@ function get_multipart(text, boundary) {
       }
     });
     if (!key)
-      nope();
+      throw new Error("Malformed form data");
     append(key, body);
   });
   return data;
@@ -2125,7 +2163,7 @@ function get_multipart(text, boundary) {
 async function respond(incoming, options2, state = {}) {
   if (incoming.path !== "/" && options2.trailing_slash !== "ignore") {
     const has_trailing_slash = incoming.path.endsWith("/");
-    if (has_trailing_slash && options2.trailing_slash === "never" || !has_trailing_slash && options2.trailing_slash === "always" && !incoming.path.split("/").pop().includes(".")) {
+    if (has_trailing_slash && options2.trailing_slash === "never" || !has_trailing_slash && options2.trailing_slash === "always" && !(incoming.path.split("/").pop() || "").includes(".")) {
       const path = has_trailing_slash ? incoming.path.slice(0, -1) : incoming.path + "/";
       const q = incoming.query.toString();
       return {
@@ -2143,7 +2181,7 @@ async function respond(incoming, options2, state = {}) {
         ...incoming,
         headers,
         body: parse_body(incoming.rawBody, headers),
-        params: null,
+        params: {},
         locals: {}
       },
       resolve: async (request) => {
@@ -2153,24 +2191,22 @@ async function respond(incoming, options2, state = {}) {
             $session: await options2.hooks.getSession(request),
             page_config: { ssr: false, router: true, hydrate: true },
             status: 200,
-            error: null,
-            branch: [],
-            page: null
+            branch: []
           });
         }
         for (const route of options2.manifest.routes) {
           if (!route.pattern.test(request.path))
             continue;
-          const response = route.type === "endpoint" ? await render_route(request, route) : await render_page(request, route, options2, state);
+          const response = route.type === "endpoint" ? await render_endpoint(request, route) : await render_page(request, route, options2, state);
           if (response) {
             if (response.status === 200) {
               if (!/(no-store|immutable)/.test(response.headers["cache-control"])) {
-                const etag = `"${hash(response.body)}"`;
+                const etag = `"${hash(response.body || "")}"`;
                 if (request.headers["if-none-match"] === etag) {
                   return {
                     status: 304,
                     headers: {},
-                    body: null
+                    body: ""
                   };
                 }
                 response.headers["etag"] = etag;
@@ -2179,10 +2215,19 @@ async function respond(incoming, options2, state = {}) {
             return response;
           }
         }
-        return await render_page(request, null, options2, state);
+        const $session = await options2.hooks.getSession(request);
+        return await respond_with_error({
+          request,
+          options: options2,
+          state,
+          $session,
+          status: 404,
+          error: new Error(`Not found: ${request.path}`)
+        });
       }
     });
-  } catch (e) {
+  } catch (err) {
+    const e = coalesce_to_error(err);
     options2.handle_error(e);
     return {
       status: 500,
@@ -2192,9 +2237,7 @@ async function respond(incoming, options2, state = {}) {
   }
 }
 
-// node_modules/svelte/internal/index.mjs
-function noop2() {
-}
+// .svelte-kit/output/server/app.js
 function run(fn) {
   return fn();
 }
@@ -2204,14 +2247,6 @@ function blank_object() {
 function run_all(fns) {
   fns.forEach(run);
 }
-function is_function(thing) {
-  return typeof thing === "function";
-}
-function is_empty(obj) {
-  return Object.keys(obj).length === 0;
-}
-var tasks = new Set();
-var active_docs = new Set();
 var current_component;
 function set_current_component(component) {
   current_component = component;
@@ -2221,45 +2256,10 @@ function get_current_component() {
     throw new Error("Function called outside component initialization");
   return current_component;
 }
-function onMount(fn) {
-  get_current_component().$$.on_mount.push(fn);
-}
-function afterUpdate(fn) {
-  get_current_component().$$.after_update.push(fn);
-}
 function setContext(key, context) {
   get_current_component().$$.context.set(key, context);
 }
-var resolved_promise = Promise.resolve();
-var seen_callbacks = new Set();
-var outroing = new Set();
-var globals = typeof window !== "undefined" ? window : typeof globalThis !== "undefined" ? globalThis : global;
-var boolean_attributes = new Set([
-  "allowfullscreen",
-  "allowpaymentrequest",
-  "async",
-  "autofocus",
-  "autoplay",
-  "checked",
-  "controls",
-  "default",
-  "defer",
-  "disabled",
-  "formnovalidate",
-  "hidden",
-  "ismap",
-  "loop",
-  "multiple",
-  "muted",
-  "nomodule",
-  "novalidate",
-  "open",
-  "playsinline",
-  "readonly",
-  "required",
-  "reversed",
-  "selected"
-]);
+Promise.resolve();
 var escaped2 = {
   '"': "&quot;",
   "'": "&#39;",
@@ -2316,59 +2316,8 @@ function create_ssr_component(fn) {
     $$render
   };
 }
-function destroy_component(component, detaching) {
-  const $$ = component.$$;
-  if ($$.fragment !== null) {
-    run_all($$.on_destroy);
-    $$.fragment && $$.fragment.d(detaching);
-    $$.on_destroy = $$.fragment = null;
-    $$.ctx = [];
-  }
+function afterUpdate() {
 }
-var SvelteElement;
-if (typeof HTMLElement === "function") {
-  SvelteElement = class extends HTMLElement {
-    constructor() {
-      super();
-      this.attachShadow({ mode: "open" });
-    }
-    connectedCallback() {
-      const { on_mount } = this.$$;
-      this.$$.on_disconnect = on_mount.map(run).filter(is_function);
-      for (const key in this.$$.slotted) {
-        this.appendChild(this.$$.slotted[key]);
-      }
-    }
-    attributeChangedCallback(attr, _oldValue, newValue) {
-      this[attr] = newValue;
-    }
-    disconnectedCallback() {
-      run_all(this.$$.on_disconnect);
-    }
-    $destroy() {
-      destroy_component(this, 1);
-      this.$destroy = noop2;
-    }
-    $on(type, callback) {
-      const callbacks = this.$$.callbacks[type] || (this.$$.callbacks[type] = []);
-      callbacks.push(callback);
-      return () => {
-        const index2 = callbacks.indexOf(callback);
-        if (index2 !== -1)
-          callbacks.splice(index2, 1);
-      };
-    }
-    $set($$props) {
-      if (this.$$set && !is_empty($$props)) {
-        this.$$.skip_bound = true;
-        this.$$set($$props);
-        this.$$.skip_bound = false;
-      }
-    }
-  };
-}
-
-// .svelte-kit/output/server/app.js
 var css$2 = {
   code: "#svelte-announcer.svelte-9z6sc{position:absolute;left:0;top:0;clip:rect(0 0 0 0);-webkit-clip-path:inset(50%);clip-path:inset(50%);overflow:hidden;white-space:nowrap;width:1px;height:1px}",
   map: `{"version":3,"file":"root.svelte","sources":["root.svelte"],"sourcesContent":["<!-- This file is generated by @sveltejs/kit \u2014 do not edit it! -->\\n<script>\\n\\timport { setContext, afterUpdate, onMount } from 'svelte';\\n\\n\\t// stores\\n\\texport let stores;\\n\\texport let page;\\n\\n\\texport let components;\\n\\texport let props_0 = null;\\n\\texport let props_1 = null;\\n\\texport let props_2 = null;\\n\\n\\tsetContext('__svelte__', stores);\\n\\n\\t$: stores.page.set(page);\\n\\tafterUpdate(stores.page.notify);\\n\\n\\tlet mounted = false;\\n\\tlet navigated = false;\\n\\tlet title = null;\\n\\n\\tonMount(() => {\\n\\t\\tconst unsubscribe = stores.page.subscribe(() => {\\n\\t\\t\\tif (mounted) {\\n\\t\\t\\t\\tnavigated = true;\\n\\t\\t\\t\\ttitle = document.title || 'untitled page';\\n\\t\\t\\t}\\n\\t\\t});\\n\\n\\t\\tmounted = true;\\n\\t\\treturn unsubscribe;\\n\\t});\\n<\/script>\\n\\n<svelte:component this={components[0]} {...(props_0 || {})}>\\n\\t{#if components[1]}\\n\\t\\t<svelte:component this={components[1]} {...(props_1 || {})}>\\n\\t\\t\\t{#if components[2]}\\n\\t\\t\\t\\t<svelte:component this={components[2]} {...(props_2 || {})}/>\\n\\t\\t\\t{/if}\\n\\t\\t</svelte:component>\\n\\t{/if}\\n</svelte:component>\\n\\n{#if mounted}\\n\\t<div id=\\"svelte-announcer\\" aria-live=\\"assertive\\" aria-atomic=\\"true\\">\\n\\t\\t{#if navigated}\\n\\t\\t\\t{title}\\n\\t\\t{/if}\\n\\t</div>\\n{/if}\\n\\n<style>\\n\\t#svelte-announcer {\\n\\t\\tposition: absolute;\\n\\t\\tleft: 0;\\n\\t\\ttop: 0;\\n\\t\\tclip: rect(0 0 0 0);\\n\\t\\t-webkit-clip-path: inset(50%);\\n\\t\\t        clip-path: inset(50%);\\n\\t\\toverflow: hidden;\\n\\t\\twhite-space: nowrap;\\n\\t\\twidth: 1px;\\n\\t\\theight: 1px;\\n\\t}</style>"],"names":[],"mappings":"AAsDC,iBAAiB,aAAC,CAAC,AAClB,QAAQ,CAAE,QAAQ,CAClB,IAAI,CAAE,CAAC,CACP,GAAG,CAAE,CAAC,CACN,IAAI,CAAE,KAAK,CAAC,CAAC,CAAC,CAAC,CAAC,CAAC,CAAC,CAAC,CACnB,iBAAiB,CAAE,MAAM,GAAG,CAAC,CACrB,SAAS,CAAE,MAAM,GAAG,CAAC,CAC7B,QAAQ,CAAE,MAAM,CAChB,WAAW,CAAE,MAAM,CACnB,KAAK,CAAE,GAAG,CACV,MAAM,CAAE,GAAG,AACZ,CAAC"}`
@@ -2382,19 +2331,6 @@ var Root = create_ssr_component(($$result, $$props, $$bindings, slots) => {
   let { props_2 = null } = $$props;
   setContext("__svelte__", stores);
   afterUpdate(stores.page.notify);
-  let mounted = false;
-  let navigated = false;
-  let title = null;
-  onMount(() => {
-    const unsubscribe = stores.page.subscribe(() => {
-      if (mounted) {
-        navigated = true;
-        title = document.title || "untitled page";
-      }
-    });
-    mounted = true;
-    return unsubscribe;
-  });
   if ($$props.stores === void 0 && $$bindings.stores && stores !== void 0)
     $$bindings.stores(stores);
   if ($$props.page === void 0 && $$bindings.page && page !== void 0)
@@ -2420,7 +2356,7 @@ ${validate_component(components[0] || missing_component, "svelte:component").$$r
     })}` : ``}`
   })}
 
-${mounted ? `<div id="${"svelte-announcer"}" aria-live="${"assertive"}" aria-atomic="${"true"}" class="${"svelte-9z6sc"}">${navigated ? `${escape2(title)}` : ``}</div>` : ``}`;
+${``}`;
 });
 function set_paths(paths) {
 }
@@ -2432,22 +2368,26 @@ var user_hooks = /* @__PURE__ */ Object.freeze({
 });
 var template = ({ head, body }) => '<!DOCTYPE html>\n<html lang="en">\n  <head>\n    <meta charset="utf-8" />\n    <link rel="icon" href="/aether-logo.png" />\n    <meta name="viewport" content="width=device-width, initial-scale=1" />\n\n    ' + head + '\n  </head>\n  <body>\n    <div id="svelte">' + body + "</div>\n  </body>\n</html>\n";
 var options = null;
-function init(settings) {
+var default_settings = { paths: { "base": "", "assets": "/." } };
+function init(settings = default_settings) {
   set_paths(settings.paths);
   set_prerendering(settings.prerendering || false);
   options = {
     amp: false,
     dev: false,
     entry: {
-      file: "/./_app/start-1cd56b47.js",
+      file: "/./_app/start-4d3b4b2f.js",
       css: ["/./_app/assets/start-9aa571ba.css"],
-      js: ["/./_app/start-1cd56b47.js", "/./_app/chunks/vendor-c6d4d8a9.js"]
+      js: ["/./_app/start-4d3b4b2f.js", "/./_app/chunks/vendor-412bbb13.js"]
     },
     fetched: void 0,
     floc: false,
     get_component_path: (id) => "/./_app/" + entry_lookup[id],
     get_stack: (error22) => String(error22),
     handle_error: (error22) => {
+      if (error22.frame) {
+        console.error(error22.frame);
+      }
       console.error(error22.stack);
       error22.stack = options.get_stack(error22);
     },
@@ -2459,6 +2399,7 @@ function init(settings) {
     paths: settings.paths,
     read: settings.read,
     root: Root,
+    service_worker: null,
     router: true,
     ssr: true,
     target: "#svelte",
@@ -2483,7 +2424,8 @@ var manifest = {
 };
 var get_hooks = (hooks) => ({
   getSession: hooks.getSession || (() => ({})),
-  handle: hooks.handle || (({ request, resolve: resolve2 }) => resolve2(request))
+  handle: hooks.handle || (({ request, resolve: resolve2 }) => resolve2(request)),
+  serverFetch: hooks.serverFetch || fetch
 });
 var module_lookup = {
   "src/routes/__layout.svelte": () => Promise.resolve().then(function() {
@@ -2496,14 +2438,13 @@ var module_lookup = {
     return index;
   })
 };
-var metadata_lookup = { "src/routes/__layout.svelte": { "entry": "/./_app/pages/__layout.svelte-ec5306b4.js", "css": ["/./_app/assets/pages/__layout.svelte-08f2f148.css"], "js": ["/./_app/pages/__layout.svelte-ec5306b4.js", "/./_app/chunks/vendor-c6d4d8a9.js"], "styles": null }, ".svelte-kit/build/components/error.svelte": { "entry": "/./_app/error.svelte-cdeb856e.js", "css": [], "js": ["/./_app/error.svelte-cdeb856e.js", "/./_app/chunks/vendor-c6d4d8a9.js"], "styles": null }, "src/routes/index.svelte": { "entry": "/./_app/pages/index.svelte-b2c1d41a.js", "css": ["/./_app/assets/pages/index.svelte-c91fc899.css"], "js": ["/./_app/pages/index.svelte-b2c1d41a.js", "/./_app/chunks/vendor-c6d4d8a9.js"], "styles": null } };
+var metadata_lookup = { "src/routes/__layout.svelte": { "entry": "/./_app/pages/__layout.svelte-bfa566c8.js", "css": ["/./_app/assets/pages/__layout.svelte-08f2f148.css"], "js": ["/./_app/pages/__layout.svelte-bfa566c8.js", "/./_app/chunks/vendor-412bbb13.js"], "styles": [] }, ".svelte-kit/build/components/error.svelte": { "entry": "/./_app/error.svelte-ec50947b.js", "css": [], "js": ["/./_app/error.svelte-ec50947b.js", "/./_app/chunks/vendor-412bbb13.js"], "styles": [] }, "src/routes/index.svelte": { "entry": "/./_app/pages/index.svelte-e5d02ef3.js", "css": ["/./_app/assets/pages/index.svelte-74b65816.css"], "js": ["/./_app/pages/index.svelte-e5d02ef3.js", "/./_app/chunks/vendor-412bbb13.js"], "styles": [] } };
 async function load_component(file) {
   return {
     module: await module_lookup[file](),
     ...metadata_lookup[file]
   };
 }
-init({ paths: { "base": "", "assets": "/." } });
 function render(request, {
   prerender: prerender2
 } = {}) {
@@ -2527,7 +2468,7 @@ var __layout = /* @__PURE__ */ Object.freeze({
 function load({ error: error22, status }) {
   return { props: { error: error22, status } };
 }
-var Error2 = create_ssr_component(($$result, $$props, $$bindings, slots) => {
+var Error$1 = create_ssr_component(($$result, $$props, $$bindings, slots) => {
   let { status } = $$props;
   let { error: error22 } = $$props;
   if ($$props.status === void 0 && $$bindings.status && status !== void 0)
@@ -2536,38 +2477,29 @@ var Error2 = create_ssr_component(($$result, $$props, $$bindings, slots) => {
     $$bindings.error(error22);
   return `<h1>${escape2(status)}</h1>
 
-<p>${escape2(error22.message)}</p>
+<pre>${escape2(error22.message)}</pre>
 
 
+
+${error22.frame ? `<pre>${escape2(error22.frame)}</pre>` : ``}
 ${error22.stack ? `<pre>${escape2(error22.stack)}</pre>` : ``}`;
 });
 var error2 = /* @__PURE__ */ Object.freeze({
   __proto__: null,
   [Symbol.toStringTag]: "Module",
-  "default": Error2,
+  "default": Error$1,
   load
 });
 var css = {
   code: "section.svelte-g623to{min-height:19rem}section.svelte-g623to,.copy-wrapper.svelte-g623to{display:flex;flex-direction:column;justify-content:center;align-items:center}.flex-item.svelte-g623to{flex:1 0}h1.svelte-g623to,p.svelte-g623to{color:white}h1.svelte-g623to{font-family:'Goldman';font-size:2.5rem;margin-bottom:0 0 1em 0;text-align:center}p.svelte-g623to{margin:0.5rem}img.svelte-g623to{transition:transform 0.5s linear}.entering.svelte-g623to{transform:rotate(8deg)}.hovering.svelte-g623to{-webkit-animation:3s infinite svelte-g623to-hover;animation:3s infinite svelte-g623to-hover}@-webkit-keyframes svelte-g623to-hover{from,to{transform:translate3d(0, 0, 0)}50%{transform:translate3d(0, 0.5rem, 0)}}@keyframes svelte-g623to-hover{from,to{transform:translate3d(0, 0, 0)}50%{transform:translate3d(0, 0.5rem, 0)}}a.svelte-g623to{color:#7fb6c9;text-decoration:none}a.svelte-g623to:hover{text-decoration:underline}@media(max-width: 500px){h1.svelte-g623to{font-size:2rem}}",
-  map: `{"version":3,"file":"index.svelte","sources":["index.svelte"],"sourcesContent":["<script context=\\"module\\">\\n  export const prerender = true;\\n<\/script>\\n\\n<script>\\n  import { onMount } from 'svelte';\\n  import { fly, fade } from 'svelte/transition';\\n  import '@fontsource/goldman';\\n\\n  let mounted = false;\\n  let entering = true;\\n  let hovering = false;\\n\\n  onMount(() => {\\n    mounted = true;\\n\\n    setTimeout(() => {\\n      entering = false;\\n    }, 3000);\\n  });\\n<\/script>\\n\\n<svelte:head>\\n  <title>Aether Unmanned Aerial Operations</title>\\n</svelte:head>\\n\\n<section>\\n  <div class=\\"flex-item\\">\\n    {#if mounted}\\n      <div in:fly={{ x: -1000, duration: 3500 }} on:introend={() => (hovering = true)}>\\n        <img src=\\"aether-logo.png\\" alt=\\"Aether Logo\\" class:entering class:hovering />\\n      </div>\\n    {/if}\\n  </div>\\n  <div class=\\"flex-item\\">\\n    {#if hovering}\\n      <div in:fade class=\\"copy-wrapper\\">\\n        <h1>Aether Unmanned Aerial Operations</h1>\\n        <p>Website coming soon.</p>\\n        <p>\\n          Contact us at <a href=\\"mailto:info@aether.com\\">info@aether.com</a>.\\n        </p>\\n      </div>\\n    {/if}\\n  </div>\\n</section>\\n\\n<style>\\n  section {\\n    min-height: 19rem;\\n  }\\n\\n  section,\\n  .copy-wrapper {\\n    display: flex;\\n    flex-direction: column;\\n    justify-content: center;\\n    align-items: center;\\n  }\\n\\n  .flex-item {\\n    flex: 1 0;\\n  }\\n\\n  h1,\\n  p {\\n    color: white;\\n  }\\n\\n  h1 {\\n    font-family: 'Goldman';\\n    font-size: 2.5rem;\\n    margin-bottom: 0 0 1em 0;\\n    text-align: center;\\n  }\\n\\n  p {\\n    margin: 0.5rem;\\n  }\\n\\n  img {\\n    transition: transform 0.5s linear;\\n  }\\n\\n  .entering {\\n    transform: rotate(8deg);\\n  }\\n\\n  .hovering {\\n    -webkit-animation: 3s infinite hover;\\n            animation: 3s infinite hover;\\n  }\\n\\n  @-webkit-keyframes hover {\\n    from,\\n    to {\\n      transform: translate3d(0, 0, 0);\\n    }\\n    50% {\\n      transform: translate3d(0, 0.5rem, 0);\\n    }\\n  }\\n\\n  @keyframes hover {\\n    from,\\n    to {\\n      transform: translate3d(0, 0, 0);\\n    }\\n    50% {\\n      transform: translate3d(0, 0.5rem, 0);\\n    }\\n  }\\n\\n  a {\\n    color: #7fb6c9;\\n    text-decoration: none;\\n  }\\n\\n  a:hover {\\n    text-decoration: underline;\\n  }\\n\\n  @media (max-width: 500px) {\\n    h1 {\\n      font-size: 2rem;\\n    }\\n  }</style>\\n"],"names":[],"mappings":"AAgDE,OAAO,cAAC,CAAC,AACP,UAAU,CAAE,KAAK,AACnB,CAAC,AAED,qBAAO,CACP,aAAa,cAAC,CAAC,AACb,OAAO,CAAE,IAAI,CACb,cAAc,CAAE,MAAM,CACtB,eAAe,CAAE,MAAM,CACvB,WAAW,CAAE,MAAM,AACrB,CAAC,AAED,UAAU,cAAC,CAAC,AACV,IAAI,CAAE,CAAC,CAAC,CAAC,AACX,CAAC,AAED,gBAAE,CACF,CAAC,cAAC,CAAC,AACD,KAAK,CAAE,KAAK,AACd,CAAC,AAED,EAAE,cAAC,CAAC,AACF,WAAW,CAAE,SAAS,CACtB,SAAS,CAAE,MAAM,CACjB,aAAa,CAAE,CAAC,CAAC,CAAC,CAAC,GAAG,CAAC,CAAC,CACxB,UAAU,CAAE,MAAM,AACpB,CAAC,AAED,CAAC,cAAC,CAAC,AACD,MAAM,CAAE,MAAM,AAChB,CAAC,AAED,GAAG,cAAC,CAAC,AACH,UAAU,CAAE,SAAS,CAAC,IAAI,CAAC,MAAM,AACnC,CAAC,AAED,SAAS,cAAC,CAAC,AACT,SAAS,CAAE,OAAO,IAAI,CAAC,AACzB,CAAC,AAED,SAAS,cAAC,CAAC,AACT,iBAAiB,CAAE,EAAE,CAAC,QAAQ,CAAC,mBAAK,CAC5B,SAAS,CAAE,EAAE,CAAC,QAAQ,CAAC,mBACjC,CAAC,AAED,mBAAmB,mBAAM,CAAC,AACxB,IAAI,CACJ,EAAE,AAAC,CAAC,AACF,SAAS,CAAE,YAAY,CAAC,CAAC,CAAC,CAAC,CAAC,CAAC,CAAC,CAAC,AACjC,CAAC,AACD,GAAG,AAAC,CAAC,AACH,SAAS,CAAE,YAAY,CAAC,CAAC,CAAC,MAAM,CAAC,CAAC,CAAC,CAAC,AACtC,CAAC,AACH,CAAC,AAED,WAAW,mBAAM,CAAC,AAChB,IAAI,CACJ,EAAE,AAAC,CAAC,AACF,SAAS,CAAE,YAAY,CAAC,CAAC,CAAC,CAAC,CAAC,CAAC,CAAC,CAAC,AACjC,CAAC,AACD,GAAG,AAAC,CAAC,AACH,SAAS,CAAE,YAAY,CAAC,CAAC,CAAC,MAAM,CAAC,CAAC,CAAC,CAAC,AACtC,CAAC,AACH,CAAC,AAED,CAAC,cAAC,CAAC,AACD,KAAK,CAAE,OAAO,CACd,eAAe,CAAE,IAAI,AACvB,CAAC,AAED,eAAC,MAAM,AAAC,CAAC,AACP,eAAe,CAAE,SAAS,AAC5B,CAAC,AAED,MAAM,AAAC,YAAY,KAAK,CAAC,AAAC,CAAC,AACzB,EAAE,cAAC,CAAC,AACF,SAAS,CAAE,IAAI,AACjB,CAAC,AACH,CAAC"}`
+  map: `{"version":3,"file":"index.svelte","sources":["index.svelte"],"sourcesContent":["<script context=\\"module\\">\\n  export const prerender = true;\\n<\/script>\\n\\n<script>\\n  import { onMount } from 'svelte';\\n  import { fly, fade } from 'svelte/transition';\\n  import '@fontsource/goldman';\\n\\n  let mounted = false;\\n  let entering = true;\\n  let hovering = false;\\n\\n  onMount(() => {\\n    mounted = true;\\n\\n    setTimeout(() => {\\n      entering = false;\\n    }, 3000);\\n  });\\n<\/script>\\n\\n<svelte:head>\\n  <title>Aether Unmanned Aerial Operations</title>\\n  <meta property=\\"og:image\\" content=\\"aether-logo.png\\">\\n  <meta property=\\"og:title\\" content=\\"Aether Unmanned Aerial Operations\\">\\n  <meta property=\\"og:description\\" content=\\"Providing unmanned aerial photography and videography.\\">\\n</svelte:head>\\n\\n<section>\\n  <div class=\\"flex-item\\">\\n    {#if mounted}\\n      <div in:fly={{ x: -1000, duration: 3500 }} on:introend={() => (hovering = true)}>\\n        <img src=\\"aether-logo.png\\" alt=\\"Aether Logo\\" class:entering class:hovering />\\n      </div>\\n    {/if}\\n  </div>\\n  <div class=\\"flex-item\\">\\n    {#if hovering}\\n      <div in:fade class=\\"copy-wrapper\\">\\n        <h1>Aether Unmanned Aerial Operations</h1>\\n        <p>Website coming soon.</p>\\n        <p>\\n          Contact us at <a href=\\"mailto:info@aether.com\\">info@aether.com</a>.\\n        </p>\\n      </div>\\n    {/if}\\n  </div>\\n</section>\\n\\n<style>\\n  section {\\n    min-height: 19rem;\\n  }\\n\\n  section,\\n  .copy-wrapper {\\n    display: flex;\\n    flex-direction: column;\\n    justify-content: center;\\n    align-items: center;\\n  }\\n\\n  .flex-item {\\n    flex: 1 0;\\n  }\\n\\n  h1,\\n  p {\\n    color: white;\\n  }\\n\\n  h1 {\\n    font-family: 'Goldman';\\n    font-size: 2.5rem;\\n    margin-bottom: 0 0 1em 0;\\n    text-align: center;\\n  }\\n\\n  p {\\n    margin: 0.5rem;\\n  }\\n\\n  img {\\n    transition: transform 0.5s linear;\\n  }\\n\\n  .entering {\\n    transform: rotate(8deg);\\n  }\\n\\n  .hovering {\\n    -webkit-animation: 3s infinite hover;\\n            animation: 3s infinite hover;\\n  }\\n\\n  @-webkit-keyframes hover {\\n    from,\\n    to {\\n      transform: translate3d(0, 0, 0);\\n    }\\n    50% {\\n      transform: translate3d(0, 0.5rem, 0);\\n    }\\n  }\\n\\n  @keyframes hover {\\n    from,\\n    to {\\n      transform: translate3d(0, 0, 0);\\n    }\\n    50% {\\n      transform: translate3d(0, 0.5rem, 0);\\n    }\\n  }\\n\\n  a {\\n    color: #7fb6c9;\\n    text-decoration: none;\\n  }\\n\\n  a:hover {\\n    text-decoration: underline;\\n  }\\n\\n  @media (max-width: 500px) {\\n    h1 {\\n      font-size: 2rem;\\n    }\\n  }</style>\\n"],"names":[],"mappings":"AAmDE,OAAO,cAAC,CAAC,AACP,UAAU,CAAE,KAAK,AACnB,CAAC,AAED,qBAAO,CACP,aAAa,cAAC,CAAC,AACb,OAAO,CAAE,IAAI,CACb,cAAc,CAAE,MAAM,CACtB,eAAe,CAAE,MAAM,CACvB,WAAW,CAAE,MAAM,AACrB,CAAC,AAED,UAAU,cAAC,CAAC,AACV,IAAI,CAAE,CAAC,CAAC,CAAC,AACX,CAAC,AAED,gBAAE,CACF,CAAC,cAAC,CAAC,AACD,KAAK,CAAE,KAAK,AACd,CAAC,AAED,EAAE,cAAC,CAAC,AACF,WAAW,CAAE,SAAS,CACtB,SAAS,CAAE,MAAM,CACjB,aAAa,CAAE,CAAC,CAAC,CAAC,CAAC,GAAG,CAAC,CAAC,CACxB,UAAU,CAAE,MAAM,AACpB,CAAC,AAED,CAAC,cAAC,CAAC,AACD,MAAM,CAAE,MAAM,AAChB,CAAC,AAED,GAAG,cAAC,CAAC,AACH,UAAU,CAAE,SAAS,CAAC,IAAI,CAAC,MAAM,AACnC,CAAC,AAED,SAAS,cAAC,CAAC,AACT,SAAS,CAAE,OAAO,IAAI,CAAC,AACzB,CAAC,AAED,SAAS,cAAC,CAAC,AACT,iBAAiB,CAAE,EAAE,CAAC,QAAQ,CAAC,mBAAK,CAC5B,SAAS,CAAE,EAAE,CAAC,QAAQ,CAAC,mBACjC,CAAC,AAED,mBAAmB,mBAAM,CAAC,AACxB,IAAI,CACJ,EAAE,AAAC,CAAC,AACF,SAAS,CAAE,YAAY,CAAC,CAAC,CAAC,CAAC,CAAC,CAAC,CAAC,CAAC,AACjC,CAAC,AACD,GAAG,AAAC,CAAC,AACH,SAAS,CAAE,YAAY,CAAC,CAAC,CAAC,MAAM,CAAC,CAAC,CAAC,CAAC,AACtC,CAAC,AACH,CAAC,AAED,WAAW,mBAAM,CAAC,AAChB,IAAI,CACJ,EAAE,AAAC,CAAC,AACF,SAAS,CAAE,YAAY,CAAC,CAAC,CAAC,CAAC,CAAC,CAAC,CAAC,CAAC,AACjC,CAAC,AACD,GAAG,AAAC,CAAC,AACH,SAAS,CAAE,YAAY,CAAC,CAAC,CAAC,MAAM,CAAC,CAAC,CAAC,CAAC,AACtC,CAAC,AACH,CAAC,AAED,CAAC,cAAC,CAAC,AACD,KAAK,CAAE,OAAO,CACd,eAAe,CAAE,IAAI,AACvB,CAAC,AAED,eAAC,MAAM,AAAC,CAAC,AACP,eAAe,CAAE,SAAS,AAC5B,CAAC,AAED,MAAM,AAAC,YAAY,KAAK,CAAC,AAAC,CAAC,AACzB,EAAE,cAAC,CAAC,AACF,SAAS,CAAE,IAAI,AACjB,CAAC,AACH,CAAC"}`
 };
 var prerender = true;
 var Routes = create_ssr_component(($$result, $$props, $$bindings, slots) => {
-  let mounted = false;
-  let entering = true;
-  onMount(() => {
-    mounted = true;
-    setTimeout(() => {
-      entering = false;
-    }, 3e3);
-  });
   $$result.css.add(css);
-  return `${$$result.head += `${$$result.title = `<title>Aether Unmanned Aerial Operations</title>`, ""}`, ""}
+  return `${$$result.head += `${$$result.title = `<title>Aether Unmanned Aerial Operations</title>`, ""}<meta property="${"og:image"}" content="${"aether-logo.png"}" data-svelte="svelte-1hil59r"><meta property="${"og:title"}" content="${"Aether Unmanned Aerial Operations"}" data-svelte="svelte-1hil59r"><meta property="${"og:description"}" content="${"Providing unmanned aerial photography and videography."}" data-svelte="svelte-1hil59r">`, ""}
 
-<section class="${"svelte-g623to"}"><div class="${"flex-item svelte-g623to"}">${mounted ? `<div><img src="${"aether-logo.png"}" alt="${"Aether Logo"}" class="${[
-    "svelte-g623to",
-    (entering ? "entering" : "") + " "
-  ].join(" ").trim()}"></div>` : ``}</div>
+<section class="${"svelte-g623to"}"><div class="${"flex-item svelte-g623to"}">${``}</div>
   <div class="${"flex-item svelte-g623to"}">${``}</div>
 </section>`;
 });
@@ -2579,10 +2511,12 @@ var index = /* @__PURE__ */ Object.freeze({
 });
 
 // .svelte-kit/netlify/entry.js
+init();
 async function handler(event) {
   const { path, httpMethod, headers, rawQuery, body, isBase64Encoded } = event;
   const query = new URLSearchParams(rawQuery);
-  const rawBody = headers["content-type"] === "application/octet-stream" ? new TextEncoder("base64").encode(body) : isBase64Encoded ? Buffer.from(body, "base64").toString() : body;
+  const type = headers["content-type"];
+  const rawBody = type && isContentTypeTextual(type) ? isBase64Encoded ? Buffer.from(body, "base64").toString() : body : new TextEncoder("base64").encode(body);
   const rendered = await render({
     method: httpMethod,
     headers,
@@ -2594,7 +2528,7 @@ async function handler(event) {
     return {
       isBase64Encoded: false,
       statusCode: rendered.status,
-      headers: rendered.headers,
+      ...splitHeaders(rendered.headers),
       body: rendered.body
     };
   }
@@ -2603,21 +2537,20 @@ async function handler(event) {
     body: "Not found"
   };
 }
+function splitHeaders(headers) {
+  const h = {};
+  const m = {};
+  for (const key in headers) {
+    const value = headers[key];
+    const target = Array.isArray(value) ? m : h;
+    target[key] = value;
+  }
+  return {
+    headers: h,
+    multiValueHeaders: m
+  };
+}
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   handler
 });
-/*! *****************************************************************************
-Copyright (c) Microsoft Corporation.
-
-Permission to use, copy, modify, and/or distribute this software for any
-purpose with or without fee is hereby granted.
-
-THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
-REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
-AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
-INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
-LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
-OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
-PERFORMANCE OF THIS SOFTWARE.
-***************************************************************************** */
