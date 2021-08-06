@@ -4,7 +4,7 @@
 
 <script>
   import { onMount } from 'svelte';
-  import { fly, fade } from 'svelte/transition';
+  import { fly } from 'svelte/transition';
   import '@fontsource/goldman';
 
   let mounted = false;
@@ -16,7 +16,7 @@
 
     setTimeout(() => {
       entering = false;
-    }, 3000);
+    }, 2800);
   });
 </script>
 
@@ -36,15 +36,13 @@
     {/if}
   </div>
   <div class="flex-item">
-    {#if hovering}
-      <div in:fade class="copy-wrapper">
-        <h1>Aether Unmanned Aerial Operations</h1>
-        <p>Website coming soon.</p>
-        <p>
+      <div class="copy-wrapper">
+        <h1 class:show-text={hovering}>Aether Unmanned Aerial Operations</h1>
+        <p class:show-text={hovering}>Website coming soon.</p>
+        <p class:show-text={hovering}>
           Contact us at <a href="mailto:info@aether.com">info@aether.com</a>.
         </p>
       </div>
-    {/if}
   </div>
 </section>
 
@@ -68,12 +66,17 @@
   h1,
   p {
     color: white;
+    opacity: 0;
+    transition: opacity 1s ease-in;
+  }
+
+  .show-text {
+    opacity: 1;
   }
 
   h1 {
     font-family: 'Goldman';
     font-size: 2.5rem;
-    margin-bottom: 0 0 1em 0;
     text-align: center;
   }
 
